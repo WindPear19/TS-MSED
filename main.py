@@ -9,13 +9,15 @@ import time
 import csv
 from tqdm import tqdm
 import warnings
-
+import math
 from models.mamba import Mamba, ModelArgs
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 from sklearn.model_selection import train_test_split
-from models import birnn_raw as BiRNN
+from models import testmamba as testmamba
+from models.testmamba import MambaTextClassification
+
 
 from transformers import (
     AdamW,
@@ -47,86 +49,32 @@ def load_model(Configs, VOCAB_SIZE=None, checkpoint=None):
     logger.info("----------------init model-----------------------")
 
 
-    if not Configs.use_plm:
-        if Configs.model.lower() in ["ts-csw", "cnn"]:
-            Model_Configs = Configs.CNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = CNN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["birnn"]:
-            Model_Configs = Configs.RNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = BiRNN.TC(**{**Model_Configs, "class_num": Configs.class_num})
-        elif Configs.model.lower() in ["fcn", "fc"]:
-            Model_Configs = Configs.FCN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = FCN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["lstmatt"]:
-            Model_Configs = Configs.LSTMATT
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = LSTMATT.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["r-bilstm-c", "r-b-c", "rbc", "rbilstmc"]:
-            Model_Configs = Configs.RBiLSTMC
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = RBC.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["bilstmdense", "bilstm-dense", "bilstm_dense", "bi-lstm-dense"]:
-            Model_Configs = Configs.BiLSTMDENSE
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = BLSTMDENSE.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["sesy"]:
-            Model_Configs = Configs.SESY
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = SESY.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["gnn"]:
-            Model_Configs = Configs.GNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = GNN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        else:
-            logger.error("no such model, exit")
-            exit()
-        if checkpoint is not None:
-            logger.info("---------------------loading model from {}------------\n\n".format(checkpoint))
-            model = torch.load(os.path.join(checkpoint, "pytorch_model.bin"))
-    else:
-        if checkpoint is not None:
-            logger.info("---------------------loading model from {}------------\n\n".format(checkpoint))
-            model_name_or_path = checkpoint
-        else:
-            logger.info("-------------loading pretrained language model from huggingface--------------\n\n")
-            model_name_or_path = Configs.model_name_or_path
+    # if Configs.model.lower() in ["birnn"]:
+    #     Model_Configs = Configs.RNN
+    #     model = BiRNN.BERT_TC.from_pretrained(model_name_or_path,
+    #                                         **{**Model_Configs, "class_num": Configs.class_num, })
 
-        if Configs.model.lower() in ["ts-csw", "cnn"]:
-            Model_Configs = Configs.CNN
-            model = CNN.BERT_TC.from_pretrained(model_name_or_path,
-                                                **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["birnn"]:
-            Model_Configs = Configs.RNN
-            model = BiRNN.BERT_TC.from_pretrained(model_name_or_path,
-                                                **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["fcn", "fc"]:
-            Model_Configs = Configs.FCN
-            model = FCN.BERT_TC.from_pretrained(model_name_or_path,**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["lstmatt"]:
-            Model_Configs = Configs.LSTMATT
-            model = LSTMATT.BERT_TC.from_pretrained(model_name_or_path,
-                                                **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["r-bilstm-c", "r-b-c", "rbc", "rbilstmc"]:
-            Model_Configs = Configs.RBiLSTMC
-            model = RBC.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["bilstmdense", "bilstm-dense", "bilstm_dense", "bi-lstm-dense"]:
-            Model_Configs = Configs.BiLSTMDENSE
-            model = BLSTMDENSE.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["sesy"]:
-            Model_Configs = Configs.SESY
-            model = SESY.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["mamba"]:
-            Model_Configs = Configs.RNN
-            model = Mamba.from_pretrained('/root/data1/model/mamba-370m')
-        else:
-            logger.error("no such model, exit")
-            exit()
+    if checkpoint is not None:
+        logger.info("---------------------loading model from {}------------\n\n".format(checkpoint))
+        model_name_or_path = checkpoint
+    else:
+        logger.info("-------------loading pretrained language model from huggingface--------------\n\n")
+        model_name_or_path = Configs.model_name_or_path
+
+
+    if Configs.model.lower() in ["mamba"]:
+        Model_Configs = Configs.RNN
+        model = MambaTextClassification.from_pretrained(model_name_or_path)
+        model.to("cuda")
+
+    elif Configs.model.lower() in ["testmamba"]:
+        Model_Configs = Configs.RNN
+        model = MambaTextClassification.from_pretrained(model_name_or_path)
+        model.to("cuda")
+
+    else:
+        logger.error("no such model, exit")
+        exit()
 
 
     logger.info("Model Configs")
@@ -196,6 +144,7 @@ def train( model, Configs, tokenizer):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(Configs.device) for t in batch)
+
             inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2], "labels": batch[3]}
             if Configs.task_name == "graph_steganalysis":
                 inputs = {**inputs,"graph":batch[4]}
@@ -315,20 +264,15 @@ def evaluate(model, tokenizer, Configs, task_name, split="dev", prefix="", use_t
                       "attention_mask": batch[1][:, :batch_seq_length].contiguous(),
                       "token_type_ids":batch[2][:, :batch_seq_length].contiguous(),
                       "labels": batch[3]}
-            # inputs["token_type_ids"] = (
-            #     batch[2][:, :batch_seq_length].contiguous() if Configs.model_type in ["bert", "xlnet", "albert"] else None
-            # )  # XLM, DistilBERT, RoBERTa, and XLM-RoBERTa don't use segment_ids
+
         else:
             inputs = {"input_ids": batch[0], "attention_mask": batch[1],  "token_type_ids":batch[2],"labels": batch[3]}
 
         if Configs.task_name == "graph_steganalysis":
             inputs = {**inputs,"graph":batch[4]}
-            # inputs["token_type_ids"] = (
-            #     batch[2][:, :batch_seq_length].contiguous() if Configs.model_type in ["bert", "xlnet", "albert"] else None
-            # )  # XLM, DistilBERT, RoBERTa, and XLM-RoBERTa don't use segment_ids
 
         with torch.no_grad():
-            outputs = model(**inputs)#pytorch有问题
+            outputs = model(**inputs)
             tmp_eval_loss, logits = outputs[:2]
             eval_loss += tmp_eval_loss.mean().item()
 
@@ -379,9 +323,6 @@ def load_and_cache_examples(Dataset_Configs, task, tokenizer, split="train"):
         logger.info("Loading tensors from cached file %s", cached_tensors_file)
         start_time = time.time()
         dataset = torch.load(cached_tensors_file)
-        logger.info("Finished loading tensors")
-        logger.info(f"in {time.time() - start_time}s")
-
     else:
         # no cached tensors, process data from scratch
         logger.info("Creating features from dataset file at %s", Dataset_Configs.csv_dir)
@@ -474,34 +415,10 @@ def main(Configs, seed_shift=0):
             write2file(train_texts,train_labels, os.path.join(Dataset_Configs.csv_dir,"train.csv"))
             write2file(val_texts, val_labels, os.path.join(Dataset_Configs.csv_dir, "val.csv"))
             write2file(test_texts, test_labels, os.path.join(Dataset_Configs.csv_dir, "test.csv"))
-        tokenizer = AutoTokenizer.from_pretrained(Configs.model_name_or_path,)
-        # tokenizer = AutoTokenizer.from_pretrained('/root/data1/model/gpt-neox-20b')
+        # tokenizer = AutoTokenizer.from_pretrained(Configs.model_name_or_path,)
+        tokenizer = AutoTokenizer.from_pretrained('./model/gpt-neox-20b')
         VOCAB_SIZE = tokenizer.vocab_size
-    else:
-        # not recommend
-        with open(Dataset_Configs.cover_file, 'r', encoding='utf-8') as f:
-            covers = f.read().split("\n")
-        covers = list(filter(lambda x: x not in ['', None], covers))
-        random.shuffle(covers)
-        with open(Dataset_Configs.stego_file, 'r', encoding='utf-8') as f:
-            stegos = f.read().split("\n")
-        stegos = list(filter(lambda x: x not in ['', None],  stegos))
-        random.shuffle( stegos)
-
-
-        if Configs.tokenizer:
-            Tokenizer_Configs = Configs.Tokenizer
-            data_helper = dataset.BertDataHelper([covers,  stegos], ratio=Dataset_Configs.split_ratio,
-                                                 tokenizer_config=Tokenizer_Configs)
-        else:
-            Vocabulary_Configs = Configs.Vocabulary
-            data_helper = dataset.DataHelper([covers,  stegos], use_label=True,
-                                             ratio=Dataset_Configs.split_ratio,
-                                             word_drop=Vocabulary_Configs.word_drop,
-                                             do_lower=Vocabulary_Configs.do_lower,
-                                             max_length= Vocabulary_Configs.max_length)
-
-        VOCAB_SIZE = data_helper.vocab_size
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     model = load_model(Configs, VOCAB_SIZE=VOCAB_SIZE)
 
@@ -545,7 +462,7 @@ if __name__ == '__main__':
     import argparse
     import numpy as np
     parser = argparse.ArgumentParser(description="argument for generation")
-    parser.add_argument("--config_path", type=str, default="./configs/test_IMDB.json")
+    parser.add_argument("--config_path", type=str, default="./configs/experiment/3bit.json")
     args = parser.parse_args()
     Configs = utils.Config(args.config_path).get_configs()
     os.environ["CUDA_VISIBLE_DEVICES"] = Configs.gpuid
@@ -559,6 +476,21 @@ if __name__ == '__main__':
         total_test_precision.append(test_precision)
         total_test_recall.append(test_recall)
         total_test_Fscore.append(test_Fscore)
+
+
+    total_test_acc = sorted(total_test_acc)
+    total_test_acc = total_test_acc[1:-1]
+
+    total_test_precision = sorted(total_test_precision)
+    total_test_precision = total_test_precision[1:-1]
+
+    total_test_recall = sorted(total_test_recall)
+    total_test_recall = total_test_recall[1:-1]
+
+    total_test_Fscore = sorted(total_test_Fscore)
+    total_test_Fscore = total_test_Fscore[1:-1]
+
+
     message = "Final results\n(repeat times: {}):\naccuracy\t{:.2f}%+{:.2f}%\nprecision\t{:.2f}%+{:.2f}%\nrecall\t{:.2f}%+{:.2f}%\nf1_score\t{:.2f}%+{:.2f}%"\
         .format(Configs.get("repeat_num", 1), np.mean(total_test_acc)*100, np.std(total_test_acc)*100,
                 np.mean(total_test_precision)*100, np.std(total_test_precision)*100,
